@@ -1,4 +1,4 @@
-# roadmap
+# roadmap-skill
 
 A Claude Code plugin that runs a multi-week project from one live file, `ROADMAP.md`. Claude reads it to know what comes next, and updates it every time it finishes something: a ticked box, a dated change-log line, and progress bars generated from the checkboxes.
 
