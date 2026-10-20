@@ -4,7 +4,7 @@ A Claude Code plugin that runs a multi-week project from one live file, `ROADMAP
 
 What the top of a roadmap looks like:
 
-**Progress: 32% of the 4-week plan** `[██████░░░░░░░░░░░░░░]` · Weeks 1-2 in progress: 65% `[█████████████░░░░░░░]`
+**Progress: 32% of the 4-week plan** `[██████░░░░░░░░░░░░░░]` · Week 2 in progress: 30% `[██████░░░░░░░░░░░░░░]`
 
 | Week | Items | Done | Progress | |
 | :--- | ---: | ---: | :--- | ---: |

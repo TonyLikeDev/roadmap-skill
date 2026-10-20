@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Recompute the progress block of a ROADMAP.md from its checkboxes (Python 3.9+, standard library only).
 
-Usage:  python roadmap_progress.py [ROADMAP.md] [--check] [--unit Week] [--total N] [--selftest]
+Usage:  python roadmap_progress.py [ROADMAP.md] [--check] [--selftest]
 
 Counts ``- [x]`` as 1, ``- [~]`` as 0.5 and ``- [ ]`` as 0 inside every ``## <Unit> N`` section (a section runs to the
 next ``## `` heading; ``[X]`` and ``*``/``+`` bullets count too, fenced code blocks are skipped), then rewrites the text between the ``<!-- progress:start -->`` and ``<!-- progress:end -->``
-markers. A unit without a section, or without checkboxes, counts as 0 % and reads "not started".
+markers. Units are numbered from 1. A unit without a section, or without checkboxes, counts as 0 % and reads "not started";
+a unit is "in progress" while it has checkboxes and is not finished.
 
-The unit word (one word) and the plan length may sit in the start marker, ``<!-- progress:start unit=Week total=10 -->``;
-the flags override it. Without either, the unit is ``Week`` and the total is the highest number named by a ``## Week N``
+The unit word (one word) and the plan length may sit in the start marker, ``<!-- progress:start unit=Week total=10 -->``.
+Without them, the unit is ``Week`` and the total is the highest number named by a ``## Week N``
 or a ``## Weeks A to B`` heading. ``--check`` exits 1 when the block is out of date (a pre-commit guard) and writes
 nothing; ``--selftest`` runs the built-in check.
 """
@@ -27,14 +28,13 @@ FENCE = re.compile(r"^[ \t]*```.*?^[ \t]*```", re.MULTILINE | re.DOTALL)
 
 
 def bar(fraction: float, width: int = BAR_WIDTH) -> str:
-    filled = int(round(fraction * width))
+    filled = int(fraction * width + 1e-9)  # round down: a bar is full only when done; 1e-9 absorbs float error
     return "`[" + "█" * filled + "░" * (width - filled) + "]`"
 
 
 def unit_scores(text: str, unit: str) -> dict[int, tuple[float, int]]:
     """Map unit number -> (done points, item count) for every ``## <Unit> N`` section."""
     scores: dict[int, tuple[float, int]] = {}
-    text = FENCE.sub("", text)  # a "## " or "- [x]" inside a code block is not structure
     for h in re.finditer(rf"^## {re.escape(unit)} (\d+)\b", text, re.MULTILINE):
         nxt = re.search(r"^## ", text[h.end():], re.MULTILINE)
         section = text[h.end(): h.end() + nxt.start()] if nxt else text[h.end():]
@@ -46,9 +46,9 @@ def unit_scores(text: str, unit: str) -> dict[int, tuple[float, int]]:
 def render(scores: dict[int, tuple[float, int]], unit: str, total: int, start: str) -> str:
     fractions = [scores.get(n, (0.0, 0))[0] / scores[n][1] if scores.get(n, (0, 0))[1] else 0.0 for n in range(1, total + 1)]
     overall = sum(fractions) / total
-    started = [n for n in range(1, total + 1) if scores.get(n, (0, 0))[1]]
+    started = [n for n in range(1, total + 1) if scores.get(n, (0, 0))[1] and fractions[n - 1] < 1]
     scoped = sum(fractions[n - 1] for n in started) / len(started) if started else 0.0
-    scope_label = f"no {unit.lower()} started" if not started else f"{unit} {started[0]}" if len(started) == 1 else f"{unit}s {started[0]}-{started[-1]}"
+    scope_label = f"no {unit.lower()} in progress" if not started else f"{unit} {started[0]}" if len(started) == 1 else f"{unit}s {started[0]}-{started[-1]}"
     lines = [
         start,
         f"**Progress: {overall:.0%} of the {total}-{unit.lower()} plan** {bar(overall)} · "
@@ -67,18 +67,21 @@ def render(scores: dict[int, tuple[float, int]], unit: str, total: int, start: s
     return "\n".join(lines)
 
 
-def refresh(text: str, unit: str | None = None, total: int | None = None) -> tuple[str, str]:
+def refresh(text: str) -> tuple[str, str]:
     """Return ``(new text, new block)``. Raises ValueError when the markers or the plan length are missing."""
     m = START.search(text)
     if not m or END not in text[m.end():]:
-        raise ValueError(f"markers {START.pattern[:22]}... / {END} not found")
+        raise ValueError(f"markers <!-- progress:start --> / {END} not found")
     attrs = dict(re.findall(r"(\w+)=(\S+)", m.group("attrs")))
     if not attrs.get("total", "0").isdigit():
         raise ValueError(f"total={attrs['total']} in the start marker is not a number")
-    unit = unit or attrs.get("unit", "Week")
-    scores = unit_scores(text, unit)
-    ranges = re.findall(rf"^## {re.escape(unit)}s (\d+) (?:to|-) (\d+)", text, re.MULTILINE)
-    total = total or int(attrs.get("total", 0)) or max([*scores, *(int(b) for _, b in ranges)], default=0)
+    unit = attrs.get("unit", "Week")
+    body = FENCE.sub("", text)  # a "## " or "- [x]" inside a code block is not structure
+    scores = unit_scores(body, unit)
+    if 0 in scores:
+        raise ValueError(f"'## {unit} 0' is not counted; number {unit.lower()}s from 1")
+    ranges = re.findall(rf"^## {re.escape(unit)}s (\d+) (?:to|-) (\d+)", body, re.MULTILINE)
+    total = int(attrs.get("total", 0)) or max([*scores, *(int(b) for _, b in ranges)], default=0)
     total = max([total, *scores])  # a section past the declared total extends the plan instead of vanishing
     if total < 1:
         raise ValueError(f"no '## {unit} N' sections found; add one, or set total=N in the start marker")
@@ -97,16 +100,20 @@ def selftest() -> None:
     assert "of the 4-phase plan" in block and "Phases 1-2 in progress" in block, block
     assert "| Phase 1 | 4 | 2.5 |" in block and "| Phase 2 | 1 | 0 |" in block and "| Phase 3 | - | - |" in block, block
     assert refresh(out)[0] == out, "a second run must change nothing"
-    bare = "<!-- progress:start -->\n<!-- progress:end -->\n## Week 1: a\n- [x] a\n## Weeks 2 to 3\nlater\n"
-    assert "of the 3-week plan" in refresh(bare)[1], "total comes from the range heading"
-    assert "Week 1 in progress" in refresh(bare)[1], "one started unit reads 'Week 1', not 'Weeks 1-1'"
-    assert "of the 5-week plan" in refresh(bare, total=5)[1], "--total overrides"
+    assert "| Phase 5 | 1 | 0 |" in refresh(doc + "## Phase 5: c\n- [ ] x\n")[1], "a section past total= extends the plan"
+    bare = "<!-- progress:start -->\n<!-- progress:end -->\n## Week 1: a\n- [x] a\n## Weeks 2 to 3\nlater\n```\n## Weeks 2 to 12\n```\n"
+    assert "of the 3-week plan" in refresh(bare)[1], "total comes from the range heading, not from a fenced one"
+    assert "no week in progress" in refresh(bare)[1], "a finished unit is not in progress"
     mixed = (
         "<!-- progress:start total=1 -->\n<!-- progress:end -->\n## Week 1: a\n- [X] a\n* [x] b\n"
         "```sh\n## not a heading\n- [x] not counted: inside a fence\n```\n- [ ] c\n"
     )
     assert "| Week 1 | 3 | 2 |" in refresh(mixed)[1], "[X] and * bullets count; fenced lines do not"
-    for bad, why in (("no markers here", "not found"), ("<!-- progress:start total={{TOTAL}} -->\n<!-- progress:end -->\n", "not a number")):
+    assert "Week 1 in progress" in refresh(mixed)[1], "one unit in progress reads 'Week 1', not 'Weeks 1-1'"
+    assert bar(0.975) == "`[" + "█" * 19 + "░]`", "a bar is full only when the unit is done"
+    zero = "<!-- progress:start -->\n<!-- progress:end -->\n## Week 0: setup\n- [ ] a\n"
+    for bad, why in (("no markers here", "not found"), ("<!-- progress:start total={{TOTAL}} -->\n<!-- progress:end -->\n", "not a number"),
+                     (zero, "number weeks from 1")):
         try:
             refresh(bad)
         except ValueError as exc:
@@ -120,8 +127,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Recompute the progress block of a ROADMAP.md from its checkboxes.")
     ap.add_argument("file", nargs="?", default="ROADMAP.md", help="the roadmap (default: ./ROADMAP.md)")
     ap.add_argument("--check", action="store_true", help="exit 1 if the block is out of date; write nothing")
-    ap.add_argument("--unit", help="heading word of a unit (default: the start marker's unit=, else Week)")
-    ap.add_argument("--total", type=int, help="number of units in the plan (default: the start marker's total=, else the headings)")
     ap.add_argument("--selftest", action="store_true", help="run the built-in check and exit")
     args = ap.parse_args(argv)
     if args.selftest:
@@ -130,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     path = Path(args.file)
     try:
         text = path.read_text(encoding="utf-8")
-        new, block = refresh(text, args.unit, args.total)
+        new, block = refresh(text)
     except (OSError, ValueError) as exc:
         sys.exit(f"{path}: {exc}")
     stale = new != text

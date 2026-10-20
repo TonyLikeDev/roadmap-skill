@@ -43,7 +43,7 @@ Never tick on intention. When in doubt, `[~]`.
 1. Title, then the rule paragraph: this file is the state, the plan is the plan.
 2. The legend and `Last updated: DATE (machine or session)`.
 3. `## Progress`: the generated block between `<!-- progress:start unit=Week total=10 -->` and `<!-- progress:end -->`. Never edit between the markers.
-4. One `## Week N: title` section per started unit, with `### Build`, `### Measure`, `### Write`, `### Exit criteria`, and `### Notes and deviations` once there is something to say. Later units stay one compact `## Weeks N to M` block; expand each into a full section, copying its items from the plan, when it starts. Only `## <Unit> N` sections are counted, and a section ends at the next `## ` heading.
+4. One `## Week N: title` section per started unit, with `### Build`, `### Measure`, `### Write`, `### Exit criteria`, and `### Notes and deviations` once there is something to say. Later units stay one compact `## Weeks N to M` block; expand each into a full section, copying its items from the plan, when it starts. Only `## <Unit> N` sections are counted, numbered from 1, and a section ends at the next `## ` heading.
 5. `## Immediate next actions (in order)`: numbered. Tag **User action** for what only the user can do (commit, push, run on another machine) and give the exact command.
 6. `## Change log`: append-only, dated, tagged `(machine or session)`; what was done, the key numbers, what was found, what stays open.
 
@@ -62,7 +62,7 @@ The subsection names fit research and build projects; rename them to fit the pro
 
 ## Status
 
-Read ROADMAP.md (progress block, current unit, Immediate next actions, the last change-log entries), then `git status -sb` and `git log -3` to see what happened since the last entry. Run the script with `--check`; if the block is stale, say so. Answer in a few lines: where the project stands, what is blocked on a user action, and **one** recommended next item with the reason. Do not start work and do not edit the roadmap.
+Read ROADMAP.md (progress block, current unit, Immediate next actions, the last change-log entries), then `git status -sb` and `git log -3` to see what happened since the last entry. Run the script with `--check`; if the block is stale, say so. If the project's `scripts/roadmap_progress.py` differs from the bundled one, say so and offer to copy the bundled one over it. Answer in a few lines: where the project stands, what is blocked on a user action, and **one** recommended next item with the reason. Do not start work and do not edit the roadmap.
 
 ## Work loop
 

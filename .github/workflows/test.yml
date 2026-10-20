@@ -1,0 +1,12 @@
+name: test
+on: [push, pull_request]
+jobs:
+  selftest:
+    # pinned: 3.9 is the oldest Python the script promises, and newer runner images may not ship it
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"
+      - run: python skills/roadmap/scripts/roadmap_progress.py --selftest
