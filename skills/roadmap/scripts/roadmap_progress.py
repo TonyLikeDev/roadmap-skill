@@ -4,7 +4,7 @@
 Usage:  python roadmap_progress.py [ROADMAP.md] [--check] [--unit Week] [--total N] [--selftest]
 
 Counts ``- [x]`` as 1, ``- [~]`` as 0.5 and ``- [ ]`` as 0 inside every ``## <Unit> N`` section (a section runs to the
-next ``## `` heading), then rewrites the text between the ``<!-- progress:start -->`` and ``<!-- progress:end -->``
+next ``## `` heading; ``[X]`` and ``*``/``+`` bullets count too, fenced code blocks are skipped), then rewrites the text between the ``<!-- progress:start -->`` and ``<!-- progress:end -->``
 markers. A unit without a section, or without checkboxes, counts as 0 % and reads "not started".
 
 The unit word (one word) and the plan length may sit in the start marker, ``<!-- progress:start unit=Week total=10 -->``;
@@ -22,7 +22,8 @@ from pathlib import Path
 BAR_WIDTH = 20
 START = re.compile(r"<!-- progress:start(?P<attrs>[^>]*?)-->")
 END = "<!-- progress:end -->"
-CHECKBOX = re.compile(r"^\s*- \[([ x~])\]", re.MULTILINE)
+CHECKBOX = re.compile(r"^\s*[-*+] \[([ xX~])\]", re.MULTILINE)
+FENCE = re.compile(r"^[ \t]*```.*?^[ \t]*```", re.MULTILINE | re.DOTALL)
 
 
 def bar(fraction: float, width: int = BAR_WIDTH) -> str:
@@ -33,11 +34,12 @@ def bar(fraction: float, width: int = BAR_WIDTH) -> str:
 def unit_scores(text: str, unit: str) -> dict[int, tuple[float, int]]:
     """Map unit number -> (done points, item count) for every ``## <Unit> N`` section."""
     scores: dict[int, tuple[float, int]] = {}
+    text = FENCE.sub("", text)  # a "## " or "- [x]" inside a code block is not structure
     for h in re.finditer(rf"^## {re.escape(unit)} (\d+)\b", text, re.MULTILINE):
         nxt = re.search(r"^## ", text[h.end():], re.MULTILINE)
         section = text[h.end(): h.end() + nxt.start()] if nxt else text[h.end():]
         marks = CHECKBOX.findall(section)
-        scores[int(h.group(1))] = (sum(1.0 if m == "x" else 0.5 if m == "~" else 0.0 for m in marks), len(marks))
+        scores[int(h.group(1))] = (sum(1.0 if m in "xX" else 0.5 if m == "~" else 0.0 for m in marks), len(marks))
     return scores
 
 
@@ -71,6 +73,8 @@ def refresh(text: str, unit: str | None = None, total: int | None = None) -> tup
     if not m or END not in text[m.end():]:
         raise ValueError(f"markers {START.pattern[:22]}... / {END} not found")
     attrs = dict(re.findall(r"(\w+)=(\S+)", m.group("attrs")))
+    if not attrs.get("total", "0").isdigit():
+        raise ValueError(f"total={attrs['total']} in the start marker is not a number")
     unit = unit or attrs.get("unit", "Week")
     scores = unit_scores(text, unit)
     ranges = re.findall(rf"^## {re.escape(unit)}s (\d+) (?:to|-) (\d+)", text, re.MULTILINE)
@@ -97,12 +101,18 @@ def selftest() -> None:
     assert "of the 3-week plan" in refresh(bare)[1], "total comes from the range heading"
     assert "Week 1 in progress" in refresh(bare)[1], "one started unit reads 'Week 1', not 'Weeks 1-1'"
     assert "of the 5-week plan" in refresh(bare, total=5)[1], "--total overrides"
-    try:
-        refresh("no markers here")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("missing markers must be an error")
+    mixed = (
+        "<!-- progress:start total=1 -->\n<!-- progress:end -->\n## Week 1: a\n- [X] a\n* [x] b\n"
+        "```sh\n## not a heading\n- [x] not counted: inside a fence\n```\n- [ ] c\n"
+    )
+    assert "| Week 1 | 3 | 2 |" in refresh(mixed)[1], "[X] and * bullets count; fenced lines do not"
+    for bad, why in (("no markers here", "not found"), ("<!-- progress:start total={{TOTAL}} -->\n<!-- progress:end -->\n", "not a number")):
+        try:
+            refresh(bad)
+        except ValueError as exc:
+            assert why in str(exc), exc
+        else:
+            raise AssertionError(f"{bad!r} must be an error")
     print("selftest ok")
 
 
@@ -131,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         path.write_text(new, encoding="utf-8", newline="\n")
     print(f"{path} progress block {'updated' if stale else 'already current'}")
     # ASCII-only summary so it prints on a cp1252 Windows console
-    summary = re.sub(r"`\[[^\]]*\]`", "", block.split("\n")[1]).replace("**", "")
+    summary = re.sub(r"`\[[^\]]*\]`", "", block.split("\n")[1]).replace("**", "").replace("·", "|")
     print(re.sub(r"\s+", " ", summary).strip())
     return 0
 
