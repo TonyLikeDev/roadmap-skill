@@ -1,3 +1,10 @@
+## Install
+
+```
+/plugin marketplace add TonyLikeDev/roadmap-skill
+/plugin install roadmap@roadmap
+```
+
 # roadmap-skill
 
 A Claude Code plugin that runs a multi-week project from one live file, `ROADMAP.md`. Claude reads it to know what comes next, and updates it every time it finishes something: a ticked box, a dated change-log line, and progress bars generated from the checkboxes.
@@ -29,14 +36,6 @@ The plugin answers each one with a rule:
 - **Progress bars are generated** from the checkboxes by a small script. Nobody types a percentage.
 - **Every finished item leaves three traces** in the same change: the tick, the change-log line, the refreshed bars.
 
-## Install
-
-```
-/plugin marketplace add TonyLikeDev/roadmap-skill
-/plugin install roadmap@roadmap
-```
-
-To try a local clone instead: `/plugin marketplace add /path/to/roadmap-skill`
 
 ## Use
 
