@@ -6,7 +6,7 @@ argument-hint: "[init | status | next | tick | report]"
 
 # Roadmap
 
-A small, strict way to run a multi-week project with an AI assistant, taken from a 10-week coursework project. Three ideas:
+A small, strict way to run a multi-week project with an AI assistant. Three ideas:
 
 - The **plan** (a document) holds the schedule and the decisions. It does not change when work gets done.
 - **ROADMAP.md** is the only place progress is recorded: checkboxes per unit (week, phase, sprint), a change log, an ordered list of next actions.
@@ -14,13 +14,13 @@ A small, strict way to run a multi-week project with an AI assistant, taken from
 
 Finishing an item always leaves three traces in the same change: a ticked box, a dated change-log line, a refreshed progress block.
 
-Bundled here (the skill's base directory is shown when it loads; normally `~/.claude/skills/roadmap/`):
+Bundled here (paths are relative to the skill's base directory, which is shown when it loads):
 - `scripts/roadmap_progress.py`: regenerates the progress block. Python 3.9+, no packages. `--check` exits 1 when the block is stale and writes nothing; `--selftest` verifies the script itself.
 - `templates/ROADMAP.md`, `templates/PLAN.md`, `templates/unit.md`, `templates/claude-md-section.md`.
 
 ## Pick the mode
 
-An argument picks the mode (`/roadmap init`); a plain request like those in the second column picks the same mode. With neither: if ROADMAP.md exists, do **Status**; otherwise offer **Init** and wait for a yes.
+An argument picks the mode (`/roadmap:roadmap init`); a plain request like those in the second column picks the same mode. With neither: if ROADMAP.md exists, do **Status**; otherwise offer **Init** and wait for a yes.
 
 | Argument | The user says | Mode |
 | :--- | :--- | :--- |
@@ -53,10 +53,10 @@ The subsection names fit research and build projects; rename them to fit the pro
 
 1. Look at what exists: ROADMAP.md (if present, never overwrite it: do Status instead), plan documents, README, CLAUDE.md, AGENTS.md, the test and run commands.
 2. Find the plan. If a plan document exists, derive from it. If not, ask where the plan lives or what the units and goals are (one question), and offer to write a `PLAN.md` first from `templates/PLAN.md` (objectives, decisions, the schedule per unit, risks). Decide the unit word, the number of units, the titles.
-3. Create `ROADMAP.md` from `templates/ROADMAP.md`. Fill every `{{placeholder}}` and every `<prompt>`; afterwards `grep -n '{{\|<' ROADMAP.md` should find only real content. Write the first unit (and the next, if it is concrete) as full sections with items from the plan, everything later as the compact block. An item is concrete and checkable: a file, a test, a number, a decision.
+3. Create `ROADMAP.md` from `templates/ROADMAP.md`. Fill every `{{placeholder}}` and every `<prompt>`; afterwards `grep -nE '\{\{|<[a-z]' ROADMAP.md` should find only real content (the `<!--` markers do not match). Write the first unit (and the next, if it is concrete) as full sections with items from the plan, everything later as the compact block. An item is concrete and checkable: a file, a test, a number, a decision.
 4. Copy `scripts/roadmap_progress.py` into the project's `scripts/` (create it if needed) so every machine and CI can run it without this skill. Run it, then run it with `--check`.
 5. Add the workflow to the project's CLAUDE.md: append the blocks of `templates/claude-md-section.md` that apply (create the file if missing; never rewrite what is there; skip a block already present). If other agents' tools are in use, add `AGENTS.md`: "All instructions for AI coding agents live in `CLAUDE.md`. Read it, then open `ROADMAP.md` for the current status and the next open item."
-6. Ask once about git: default is the template's rules (the assistant never commits or pushes; no AI attribution). If the user wants no attribution, create or merge `.claude/settings.json` with `{"attribution": {"commit": "", "pr": ""}, "includeCoAuthoredBy": false}`, keeping any keys already there.
+6. Ask once about git: default is the template's rules (the assistant never commits or pushes; no AI attribution). With the default, also create or merge `.claude/settings.json` with `{"attribution": {"commit": "", "pr": ""}}`, keeping any keys already there. If the user declines, skip both the git-rules block and the settings.
 7. If the project measures things, include the experiments block. If the user wants a file per unit, create them from `templates/unit.md`.
 8. Report: the files created, the units and item counts, the first item to take. Leave everything uncommitted and suggest a commit message.
 
@@ -70,7 +70,7 @@ Read ROADMAP.md (progress block, current unit, Immediate next actions, the last 
 2. Take the next open item of the current unit, or the one the user names. Say which.
 3. Build it. Verify it the way the project verifies (tests, a run, a measurement). A measured number goes into a logged run; prose goes where the project keeps its write-ups.
 4. Record it: tick the box (`[x]` or `[~]` per the legend, with specifics: file names, test counts, numbers, where the result lives), add the change-log line, update Immediate next actions and `Last updated`, and note anything surprising under the unit's Notes and deviations.
-5. Run `python3 scripts/roadmap_progress.py`. It rewrites the file, so re-read ROADMAP.md before the next edit.
+5. Run `scripts/roadmap_progress.py` with the project's Python command (`python3`, `python` or `py`; the CLAUDE.md section names it). It rewrites the file, so re-read ROADMAP.md before the next edit.
 6. Leave the changes uncommitted. Close with: what was ticked and the new progress, a suggested commit message that names the unit and the item, and the next item.
 
 ## Bookkeeping
@@ -101,7 +101,6 @@ Never commit, amend, rebase, tag or push unless the user asks for that specific 
 
 - `[x]` for "written, not run" or "mostly done": use `[~]` and say what is missing.
 - A step that only the user can do (commit, push, run on the other machine) left implied: write it as **User action** with the command.
-- Instructions that work on one OS only (BSD `patch` on macOS rejected a patch made for CRLF files): try them on the machine at hand, and write the finding in the change log.
 - A quick check's number copied into the docs: log it as a run, or keep it in chat.
 - Units written out in full long before they start: they go stale. Keep them compact until they start.
 - The script's block is overwritten on every run: edit around it, never inside it.
@@ -111,4 +110,4 @@ Never commit, amend, rebase, tag or push unless the user asks for that specific 
 
 - **Experiments** (the block in `templates/claude-md-section.md`): one folder per run, `<experiments dir>/<date>_<kind>_<name>/`, with `config.yaml` (settings, seed, device, git commit and dirty flag), `results.csv` and the main artifact; never reuse a folder, add a numeric suffix. Heavy outputs are not committed.
 - **Unit files**: `<experiments dir>/week_NN.md` from `templates/unit.md` mirror a roadmap section with the measured results; the roadmap stays the source of truth for status.
-- **Several machines**: tag change-log entries `(macbook)`, `(desktop)`; add a `Machines:` line to the legend; log the commit hash in every run; never assume the other machine has pulled; cross-machine steps are **User action** items. Copy this skill's folder to the other machine's `~/.claude/skills/` (Windows: `%USERPROFILE%\.claude\skills\`) if you want the skill there; the project's own CLAUDE.md snippet and `scripts/roadmap_progress.py` work without it.
+- **Several machines**: tag change-log entries `(macbook)`, `(desktop)`; add a `Machines:` line to the legend; log the commit hash in every run; never assume the other machine has pulled; cross-machine steps are **User action** items. Install the plugin on the other machine if you want the skill there; the project's own CLAUDE.md snippet and `scripts/roadmap_progress.py` work without it.
