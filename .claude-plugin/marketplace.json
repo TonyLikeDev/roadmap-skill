@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "roadmap",
+  "description": "Roadmap skill: run a project from a live status board.",
+  "owner": { "name": "Wildcats", "url": "https://wildcats.io" },
+  "plugins": [
+    {
+      "name": "roadmap",
+      "description": "Run a project from a live ROADMAP.md status board.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
